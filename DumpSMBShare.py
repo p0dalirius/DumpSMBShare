@@ -5,7 +5,6 @@
 # Date created       : 17 Feb 2022
 
 import argparse
-import logging
 import os
 import sys
 import traceback
@@ -17,8 +16,11 @@ from impacket.smbconnection import SMBConnection, SMB2_DIALECT_002, SMB2_DIALECT
 class BFSDumpShare(object):
     """docstring for BFSDumpShare."""
 
-    def __init__(self, smb, share, base_dir="", dump_dir="."):
+    def __init__(self, smb, share, base_dir="", dump_dir=".", quiet=False, debug=False):
         super(BFSDumpShare, self).__init__()
+        self.quiet = quiet
+        self.debug = debug
+
         self.smb = smb
         self.share = share
         self.dump_dir = dump_dir
@@ -27,99 +29,112 @@ class BFSDumpShare(object):
             os.makedirs(self.dump_dir, exist_ok=True)
 
     def list_shares(self):
-        logging.info("Listing shares ...")
+        print("[>] Listing shares ...")
         resp = self.smb.listShares()
         shares = []
         for k in range(len(resp)):
             shares.append(resp[k]["shi1_netname"][:-1])
         return shares
 
-    def dump_share(self, extensions=[], base_dir=None):
+    def dump_share(self, targetfile="", extensions=[], base_dir=None):
         if base_dir is not None:
             self.base_dir = base_dir
-        logging.info("Dumping files with extensions %s ... " % extensions)
+        print("[>] Dumping files with extensions %s ... " % extensions)
         # Breadth-first search algorithm to recursively find .extension files
         files = []
         searchdirs = [self.base_dir + "/"]
         while len(searchdirs) != 0:
             next_dirs = []
             for sdir in searchdirs:
-                logging.debug("Searching in %s " % sdir)
+                if self.debug:
+                    print("[>] Searching in %s " % sdir)
                 try:
                     for sharedfile in self.smb.listPath(self.share, sdir + "*", password=None):
                         if sharedfile.get_longname() not in [".", ".."]:
                             if sharedfile.is_directory():
-                                logging.debug("Found directory %s/" % sharedfile.get_longname())
+                                if self.debug:
+                                    print("[>] Found directory %s/" % sharedfile.get_longname())
                                 next_dirs.append(sdir + sharedfile.get_longname() + "/")
                             else:
-                                if len(extensions) == 0 or any([sharedfile.get_longname().endswith("." + e) for e in extensions]):
-                                    logging.debug("Found matching file %s" % (sdir + sharedfile.get_longname()))
+                                if len(extensions) == 0 or any([sharedfile.get_longname().endswith("." + e) for e in extensions]) or sharedfile.get_longname() == targetfile:
+                                    if self.debug or not self.quiet:
+                                        print("[>] Found matching file %s" % (sdir + sharedfile.get_longname()))
                                     full_path = sdir + sharedfile.get_longname()
                                     files.append(full_path)
                                     self.dump_file(full_path)
                                 else:
-                                    logging.debug("Found file %s" % sharedfile.get_longname())
+                                    if self.debug:
+                                        print("[>] Found file %s" % sharedfile.get_longname())
                 except SessionError as e:
-                    logging.debug(e)
+                    if self.debug:
+                        print("[error] %s " % e)
             searchdirs = next_dirs
-            logging.debug("Next iteration with %d folders." % len(next_dirs))
+            if self.debug:
+                print("[>] Next iteration with %d folders." % len(next_dirs))
         return files
 
-    def dump_file(self, filename):
+    def dump_file(self, filepath, only_file=False):
         # Sanitize dir
-        filename = filename.replace("\\", "/")
+        filepath = filepath.replace("\\", "/")
 
-        _dir, _file = os.path.dirname(filename), os.path.basename(filename)
+        _dir, _file = os.path.dirname(filepath), os.path.basename(filepath)
         if _dir.startswith("//"):
             _dir = _dir[2:]
         try:
-            # opening the files in streams instead of mounting shares allows for running the script from
-            # unprivileged containers
-            # Create directory
-            if _dir.startswith(self.base_dir.rstrip('/')):
-                _dir = _dir[len(self.base_dir.rstrip('/')):].lstrip('/')
-            if not os.path.exists(self.dump_dir + "/" + _dir + "/"):
-                os.makedirs(self.dump_dir + "/" + _dir + "/", exist_ok=True)
+            if only_file:
+                if not os.path.exists(self.dump_dir):
+                    os.makedirs(self.dump_dir, exist_ok=True)
+                path = self.dump_dir + "/" + _file
+            else:
+                # Create directory
+                if _dir.startswith(self.base_dir.rstrip('/')):
+                    _dir = _dir[len(self.base_dir.rstrip('/')):].lstrip('/')
+                if not os.path.exists(self.dump_dir + "/" + _dir + "/"):
+                    os.makedirs(self.dump_dir + "/" + _dir + "/", exist_ok=True)
+                path = self.dump_dir + "/" + _dir + "/" + _file
             # Write file
-            path = self.dump_dir + "/" + _dir + "/" + _file
             f = open(path, "wb")
-            self.smb.getFile(self.share, filename, f.write)
+            self.smb.getFile(self.share, filepath, f.write)
             f.close()
             return True
         except SessionError as e:
-            logging.error(e)
+            if self.debug:
+                print("[error] %s" % e)
             return False
         except Exception as e:
             raise
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(add_help=True, description="")
+    print("DumpSMBShare v1.2 - by @podalirius_\n")
+
+    parser = argparse.ArgumentParser(add_help=True, description="A script to dump files and folders remotely from a Windows SMB share.")
 
     parser.add_argument("target", action="store", help="[[domain/]username[:password]@]<targetName or address>")
 
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-share", type=str, default=None, help="SMB Share to dump")
-    group.add_argument("-list-shares", default=False, action="store_true", help="Lists SMB shares.")
+    group.add_argument("-s", "--share", type=str, default=None, help="SMB Share to dump")
+    group.add_argument("-l", "--list-shares", default=False, action="store_true", help="Lists SMB shares.")
 
-    parser.add_argument("-extensions", type=str, required=False, default="", help="Extensions")
-    parser.add_argument("-dump-dir", type=str, required=False, default=None, help="Dump directory")
+    parser.add_argument("-e", "--extensions", type=str, required=False, default="", help="Extensions")
+    parser.add_argument("-D", "--dump-dir", type=str, required=False, default=None, help="Dump directory")
+    parser.add_argument("-f", "--file", type=str, default=None, help="SMB file to dump")
 
-    parser.add_argument("-base-dir", type=str, required=False, default="", help="Directory to search in (Default: /)")
-    parser.add_argument("-ts", action="store_true", help="Adds timestamp to every logging output")
-    parser.add_argument("-debug", action="store_true", help="Turn DEBUG output ON")
+    parser.add_argument("-B", "--base-dir", type=str, required=False, default="", help="Directory to search in (Default: /)")
+    parser.add_argument("--debug", action="store_true", help="Turn on debug output. (Default: False)")
+    parser.add_argument("-q", "--quiet", action="store_true", default=False, help="Turn DEBUG output ON")
 
     group = parser.add_argument_group("authentication")
-    group.add_argument("-hashes", action="store", metavar="LMHASH:NTHASH", help="NTLM hashes, format is LMHASH:NTHASH")
-    group.add_argument("-no-pass", action="store_true", help="Don't ask for password (useful for -k)")
-    group.add_argument("-k", action="store_true", help="Use Kerberos authentication. Grabs credentials from ccache file (KRB5CCNAME) based on target parameters. If valid credentials cannot be found, it will use the ones specified in the command line")
-    group.add_argument("-aesKey", action="store", metavar="hex key", help="AES key to use for Kerberos Authentication (128 or 256 bits)")
+    group.add_argument("-H", "--hashes", action="store", metavar="LMHASH:NTHASH", help="NTLM hashes, format is LMHASH:NTHASH")
+    group.add_argument("--no-pass", action="store_true", help="Don't ask for password (useful for -k)")
+    group.add_argument("-k", "--kerberos", action="store_true", help="Use Kerberos authentication. Grabs credentials from ccache file (KRB5CCNAME) based on target parameters. If valid credentials cannot be found, it will use the ones specified in the command line")
+    group.add_argument("-A", "--aesKey", action="store", metavar="hex key", help="AES key to use for Kerberos Authentication (128 or 256 bits)")
 
     group = parser.add_argument_group("connection")
 
-    group.add_argument("-dc-ip", action="store", metavar="ip address", help="IP Address of the domain controller. If omitted it will use the domain part (FQDN) specified in the target parameter")
-    group.add_argument("-target-ip", action="store", metavar="ip address", help="IP Address of the target machine. If omitted it will use whatever was specified as target. This is useful when target is the NetBIOS name and you cannot resolve it")
-    group.add_argument("-port", choices=["139", "445"], nargs="?", default="445", metavar="destination port", help="Destination port to connect to SMB Server")
+    group.add_argument("--dc-ip", action="store", metavar="ip address", help="IP Address of the domain controller. If omitted it will use the domain part (FQDN) specified in the target parameter")
+    group.add_argument("-I", "--target-ip", action="store", metavar="ip address", help="IP Address of the target machine. If omitted it will use whatever was specified as target. This is useful when target is the NetBIOS name and you cannot resolve it")
+    group.add_argument("-P", "--port", choices=["139", "445"], nargs="?", default="445", metavar="destination port", help="Destination port to connect to SMB Server")
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -147,44 +162,37 @@ def parse_target(args):
     return domain, username, password, address, lmhash, nthash
 
 
-def init_logger(args):
-    # Init the example"s logger theme and debug level
-    logger.init(args.ts)
-    if args.debug is True:
-        logging.getLogger().setLevel(logging.DEBUG)
-        # Print the Library"s installation path
-        logging.debug(version.getInstallationPath())
-    else:
-        logging.getLogger().setLevel(logging.INFO)
-        logging.getLogger("impacket.smbserver").setLevel(logging.ERROR)
-
-
 def init_smb_session(args, domain, username, password, address, lmhash, nthash):
     smbClient = SMBConnection(address, args.target_ip, sess_port=int(args.port))
     dialect = smbClient.getDialect()
     if dialect == SMB_DIALECT:
-        logging.debug("SMBv1 dialect used")
+        if args.debug:
+            print("[>] SMBv1 dialect used")
     elif dialect == SMB2_DIALECT_002:
-        logging.debug("SMBv2.0 dialect used")
+        if args.debug:
+            print("[>] SMBv2.0 dialect used")
     elif dialect == SMB2_DIALECT_21:
-        logging.debug("SMBv2.1 dialect used")
+        if args.debug:
+            print("[>] SMBv2.1 dialect used")
     else:
-        logging.debug("SMBv3.0 dialect used")
-    if args.k is True:
+        if args.debug:
+            print("[>] SMBv3.0 dialect used")
+    if args.kerberos is True:
         smbClient.kerberosLogin(username, password, domain, lmhash, nthash, args.aesKey, args.dc_ip)
     else:
         smbClient.login(username, password, domain, lmhash, nthash)
     if smbClient.isGuestSession() > 0:
-        logging.debug("GUEST Session Granted")
+        if args.debug:
+            print("[>] GUEST Session Granted")
     else:
-        logging.debug("USER Session Granted")
+        if args.debug:
+            print("[>] USER Session Granted")
     return smbClient
 
 
 if __name__ == "__main__":
     args = parse_args()
     args.extensions = [e.strip() for e in args.extensions.strip().split(",") if len(e.strip()) != 0]
-    init_logger(args)
 
     domain, username, password, address, lmhash, nthash = parse_target(args)
 
@@ -199,13 +207,16 @@ if __name__ == "__main__":
         else:
             if args.dump_dir is None:
                 args.dump_dir = "./%s/%s/" % (domain, args.share)
-            g = BFSDumpShare(smbClient, args.share, base_dir=args.base_dir, dump_dir=args.dump_dir)
+            g = BFSDumpShare(smbClient, args.share, base_dir=args.base_dir, dump_dir=args.dump_dir, quiet=args.quiet, debug=args.debug)
             if args.share in g.list_shares():
-                dumped_files = g.dump_share(extensions=args.extensions)
-                print("[+] Dumped %d files from share '%s'" % (len(dumped_files), args.share))
+                if args.file is not None:
+                    print("[+] Dumping file '%s' from share '%s'" % (args.file, args.share))
+                    g.base_dir = os.path.basename(args.base_dir)
+                    g.dump_file(args.file, only_file=True)
+                else:
+                    dumped_files = g.dump_share(extensions=args.extensions)
+                    print("[+] Dumped %d files from share '%s'" % (len(dumped_files), args.share))
             else:
                 print("[>] Cannot find share '%s'" % args.share)
     except Exception as e:
-        if logging.getLogger().level == logging.DEBUG:
-            traceback.print_exc()
-        logging.error(str(e))
+        raise e
