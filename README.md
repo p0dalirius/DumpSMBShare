@@ -9,8 +9,6 @@
   <br>
 </p>
 
-![](./.github/example.png)
-
 ## Features
 
  - [x] Only list shares with `--list-shares`.
@@ -73,6 +71,8 @@ connection:
     ```
 
 ![](./.github/example_verbose.png)
+
+![](./.github/example.png)
 
 ## Contributing
 
