@@ -1,4 +1,4 @@
-# DumpSMBShare
+![](./.github/banner.png)
 
 <p align="center">
   A script to dump files and folders remotely from a Windows SMB share.
