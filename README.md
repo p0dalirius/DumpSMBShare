@@ -13,10 +13,10 @@
 
 ## Features
 
- - [x] Only list shares with `-list-shares`.
- - [x] Select only files with given extensions (with `-extensions`) or all files.
- - [x] Choose the local folder to dump to with `-dump-dir`.
- - [x] Select base folder to search from in the share with `-base-dir`.
+ - [x] Only list shares with `--list-shares`.
+ - [x] Select only files with given extensions (with `--extensions`) or all files.
+ - [x] Choose the local folder to dump to with `--dump-dir`.
+ - [x] Select base folder to search from in the share with `--base-dir`.
 
 ## Usage
 
