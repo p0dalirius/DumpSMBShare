@@ -199,7 +199,10 @@ if __name__ == "__main__":
     try:
         smbClient = init_smb_session(args, domain, username, password, address, lmhash, nthash)
         if args.list_shares:
-            g = BFSDumpShare(smbClient, args.share, dump_dir=args.dump_dir)
+            if args.dump_dir is None:
+                g = BFSDumpShare(smbClient, args.share)
+            else:
+                g = BFSDumpShare(smbClient, args.share, dump_dir=args.dump_dir)
             shares = g.list_shares()
             for s in shares:
                 print("  - %s" % s)
