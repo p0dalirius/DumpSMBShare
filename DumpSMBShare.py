@@ -16,7 +16,7 @@ from impacket.smbconnection import SMBConnection, SMB2_DIALECT_002, SMB2_DIALECT
 class BFSDumpShare(object):
     """docstring for BFSDumpShare."""
 
-    def __init__(self, smb, share, base_dir="", dump_dir=".", quiet=False, debug=False):
+    def __init__(self, smb, share, base_dir="", dump_dir=".", quiet=False, debug=False, only_list_files=False):
         super(BFSDumpShare, self).__init__()
         self.quiet = quiet
         self.debug = debug
@@ -25,6 +25,7 @@ class BFSDumpShare(object):
         self.share = share
         self.dump_dir = dump_dir
         self.base_dir = base_dir
+        self.only_list_files = only_list_files
         if not os.path.exists(self.dump_dir):
             os.makedirs(self.dump_dir, exist_ok=True)
 
@@ -57,11 +58,12 @@ class BFSDumpShare(object):
                                 next_dirs.append(sdir + sharedfile.get_longname() + "/")
                             else:
                                 if len(extensions) == 0 or any([sharedfile.get_longname().endswith("." + e) for e in extensions]) or sharedfile.get_longname() == targetfile:
-                                    if self.debug or not self.quiet:
+                                    if self.debug or not self.quiet or self.only_list_files:
                                         print("[>] Found matching file %s" % (sdir + sharedfile.get_longname()))
                                     full_path = sdir + sharedfile.get_longname()
                                     files.append(full_path)
-                                    self.dump_file(full_path)
+                                    if not self.only_list_files:
+                                        self.dump_file(full_path)
                                 else:
                                     if self.debug:
                                         print("[>] Found file %s" % sharedfile.get_longname())
@@ -114,7 +116,9 @@ def parse_args():
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-s", "--share", type=str, default=None, help="SMB Share to dump")
-    group.add_argument("-l", "--list-shares", default=False, action="store_true", help="Lists SMB shares.")
+    group.add_argument("-l", "--list-shares", default=False, action="store_true", help="Lists SMB shares on the remote machine.")
+
+    parser.add_argument("-L", "--list-files", default=False, action="store_true", help="Lists all the files present in the SMB share.")
 
     parser.add_argument("-e", "--extensions", type=str, required=False, default="", help="Extensions")
     parser.add_argument("-D", "--dump-dir", type=str, required=False, default=None, help="Dump directory")
@@ -210,7 +214,7 @@ if __name__ == "__main__":
         else:
             if args.dump_dir is None:
                 args.dump_dir = "./%s/%s/" % (domain, args.share)
-            g = BFSDumpShare(smbClient, args.share, base_dir=args.base_dir, dump_dir=args.dump_dir, quiet=args.quiet, debug=args.debug)
+            g = BFSDumpShare(smbClient, args.share, base_dir=args.base_dir, dump_dir=args.dump_dir, quiet=args.quiet, debug=args.debug, only_list=args.list_files)
             if args.share in g.list_shares():
                 if args.file is not None:
                     print("[+] Dumping file '%s' from share '%s'" % (args.file, args.share))
