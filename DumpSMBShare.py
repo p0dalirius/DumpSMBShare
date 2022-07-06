@@ -214,7 +214,7 @@ if __name__ == "__main__":
         else:
             if args.dump_dir is None:
                 args.dump_dir = "./%s/%s/" % (domain, args.share)
-            g = BFSDumpShare(smbClient, args.share, base_dir=args.base_dir, dump_dir=args.dump_dir, quiet=args.quiet, debug=args.debug, only_list=args.list_files)
+            g = BFSDumpShare(smbClient, args.share, base_dir=args.base_dir, dump_dir=args.dump_dir, quiet=args.quiet, debug=args.debug, only_list_files=args.list_files)
             if args.share in g.list_shares():
                 if args.file is not None:
                     print("[+] Dumping file '%s' from share '%s'" % (args.file, args.share))
