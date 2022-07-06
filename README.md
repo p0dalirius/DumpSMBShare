@@ -20,7 +20,7 @@
 
 ```
 $ ./DumpSMBShare.py -h
-DumpSMBShare v1.2 - by @podalirius_
+DumpSMBShare v1.3 - by @podalirius_
 
 usage: Dump.py [-h] (-s SHARE | -l) [-e EXTENSIONS] [-D DUMP_DIR] [-f FILE] [-B BASE_DIR] [--debug] [-q] [-H LMHASH:NTHASH] [--no-pass] [-k] [-A hex key]
                [--dc-ip ip address] [-I ip address] [-P [destination port]]
@@ -33,7 +33,8 @@ optional arguments:
   -h, --help            show this help message and exit
   -s SHARE, --share SHARE
                         SMB Share to dump
-  -l, --list-shares     Lists SMB shares.
+  -l, --list-shares     Lists SMB shares on the remote machine.
+  -l, --list-shares     Lists all the files present in the SMB share.
   -e EXTENSIONS, --extensions EXTENSIONS
                         Extensions
   -D DUMP_DIR, --dump-dir DUMP_DIR

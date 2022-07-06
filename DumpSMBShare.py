@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # File name          : DumpSMBShare.py
 # Author             : Podalirius (@podalirius_)
-# Date created       : 17 Feb 2022
+# Date created       : 6 Jul 2022
 
 import argparse
 import os
@@ -108,7 +108,7 @@ class BFSDumpShare(object):
 
 
 def parse_args():
-    print("DumpSMBShare v1.2 - by @podalirius_\n")
+    print("DumpSMBShare v1.3 - by @podalirius_\n")
 
     parser = argparse.ArgumentParser(add_help=True, description="A script to dump files and folders remotely from a Windows SMB share.")
 
