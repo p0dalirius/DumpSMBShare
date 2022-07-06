@@ -222,7 +222,8 @@ if __name__ == "__main__":
                     g.dump_file(args.file, only_file=True)
                 else:
                     dumped_files = g.dump_share(extensions=args.extensions)
-                    print("[+] Dumped %d files from share '%s'" % (len(dumped_files), args.share))
+                    if not args.list_files:
+                        print("[+] Dumped %d files from share '%s'" % (len(dumped_files), args.share))
             else:
                 print("[>] Cannot find share '%s'" % args.share)
     except Exception as e:
