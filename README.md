@@ -34,7 +34,7 @@ optional arguments:
   -s SHARE, --share SHARE
                         SMB Share to dump
   -l, --list-shares     Lists SMB shares on the remote machine.
-  -l, --list-shares     Lists all the files present in the SMB share.
+  -L, --list-files     Lists all the files present in the SMB share.
   -e EXTENSIONS, --extensions EXTENSIONS
                         Extensions
   -D DUMP_DIR, --dump-dir DUMP_DIR
