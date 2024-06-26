@@ -8,15 +8,15 @@ import argparse
 import os
 import sys
 import traceback
+from datetime import datetime
 from impacket import version
 from impacket.examples import logger, utils
 from impacket.smbconnection import SMBConnection, SMB2_DIALECT_002, SMB2_DIALECT_21, SMB_DIALECT, SessionError
 
-
 class BFSDumpShare(object):
     """docstring for BFSDumpShare."""
 
-    def __init__(self, smb, share, base_dir="", dump_dir=".", quiet=False, debug=False, only_list_files=False):
+    def __init__(self, smb, share, base_dir="", dump_dir=".", quiet=False, debug=False, only_list_files=False, timeline=None):
         super(BFSDumpShare, self).__init__()
         self.quiet = quiet
         self.debug = debug
@@ -26,6 +26,7 @@ class BFSDumpShare(object):
         self.dump_dir = dump_dir
         self.base_dir = base_dir
         self.only_list_files = only_list_files
+        self.timeline = timeline
         if not os.path.exists(self.dump_dir):
             os.makedirs(self.dump_dir, exist_ok=True)
 
@@ -61,7 +62,13 @@ class BFSDumpShare(object):
                                     if self.debug or not self.quiet or self.only_list_files:
                                         print("[>] Found matching file %s" % (sdir + sharedfile.get_longname()))
                                     full_path = sdir + sharedfile.get_longname()
-                                    files.append(full_path)
+                                    file_info = {
+                                        'path': full_path,
+                                        'create_time': sharedfile.get_ctime_epoch(),
+                                        'last_access_time': sharedfile.get_atime_epoch(),
+                                        'last_write_time': sharedfile.get_mtime_epoch()
+                                    }
+                                    files.append(file_info)
                                     if not self.only_list_files:
                                         self.dump_file(full_path)
                                 else:
@@ -73,6 +80,16 @@ class BFSDumpShare(object):
             searchdirs = next_dirs
             if self.debug:
                 print("[>] Next iteration with %d folders." % len(next_dirs))
+        
+        if self.timeline:
+            sort_key, order = self.timeline.split(':')
+            if sort_key in ['create', 'access', 'write'] and order in ['asc', 'desc']:
+                reverse = (order == 'desc')
+                files.sort(key=lambda x: x[f'{sort_key}_time'], reverse=reverse)
+        
+        for file_info in files:
+            print(f"[>] File: {file_info['path']} - Create Time: {datetime.fromtimestamp(file_info['create_time'])} - Last Access Time: {datetime.fromtimestamp(file_info['last_access_time'])} - Last Write Time: {datetime.fromtimestamp(file_info['last_write_time'])}")
+        
         return files
 
     def dump_file(self, filepath, only_file=False):
@@ -106,7 +123,6 @@ class BFSDumpShare(object):
         except Exception as e:
             raise
 
-
 def parse_args():
     print("DumpSMBShare v1.3 - by @podalirius_\n")
 
@@ -128,6 +144,8 @@ def parse_args():
     parser.add_argument("--debug", action="store_true", help="Turn on debug output. (Default: False)")
     parser.add_argument("-q", "--quiet", action="store_true", default=False, help="Turn DEBUG output ON")
 
+    parser.add_argument("--timeline", type=str, required=False, default=None, help="Sort files by date properties. Format: <property>:<order>, where <property> can be 'create', 'access', or 'write', and <order> can be 'asc' or 'desc'.")
+
     group = parser.add_argument_group("authentication")
     group.add_argument("-H", "--hashes", action="store", metavar="LMHASH:NTHASH", help="NTLM hashes, format is LMHASH:NTHASH")
     group.add_argument("--no-pass", action="store_true", help="Don't ask for password (useful for -k)")
@@ -146,7 +164,6 @@ def parse_args():
 
     return parser.parse_args()
 
-
 def parse_target(args):
     domain, username, password, address = utils.parse_target(args.target)
     if args.target_ip is None:
@@ -164,7 +181,6 @@ def parse_target(args):
         lmhash = ""
         nthash = ""
     return domain, username, password, address, lmhash, nthash
-
 
 def init_smb_session(args, domain, username, password, address, lmhash, nthash):
     smbClient = SMBConnection(address, args.target_ip, sess_port=int(args.port))
@@ -193,7 +209,6 @@ def init_smb_session(args, domain, username, password, address, lmhash, nthash):
             print("[>] USER Session Granted")
     return smbClient
 
-
 if __name__ == "__main__":
     args = parse_args()
     args.extensions = [e.strip() for e in args.extensions.strip().split(",") if len(e.strip()) != 0]
@@ -214,7 +229,7 @@ if __name__ == "__main__":
         else:
             if args.dump_dir is None:
                 args.dump_dir = "./%s/%s/" % (address, args.share)
-            g = BFSDumpShare(smbClient, args.share, base_dir=args.base_dir, dump_dir=args.dump_dir, quiet=args.quiet, debug=args.debug, only_list_files=args.list_files)
+            g = BFSDumpShare(smbClient, args.share, base_dir=args.base_dir, dump_dir=args.dump_dir, quiet=args.quiet, debug=args.debug, only_list_files=args.list_files, timeline=args.timeline)
             if args.share in g.list_shares():
                 if args.file is not None:
                     print("[+] Dumping file '%s' from share '%s'" % (args.file, args.share))
