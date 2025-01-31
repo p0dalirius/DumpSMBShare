@@ -20,7 +20,7 @@
 
 ```
 $ ./DumpSMBShare.py -h
-DumpSMBShare v1.3 - by @podalirius_
+DumpSMBShare v1.3 - by Remi GASCOU (Podalirius)
 
 usage: Dump.py [-h] (-s SHARE | -l) [-e EXTENSIONS] [-D DUMP_DIR] [-f FILE] [-B BASE_DIR] [--debug] [-q] [-H LMHASH:NTHASH] [--no-pass] [-k] [-A hex key]
                [--dc-ip ip address] [-I ip address] [-P [destination port]]

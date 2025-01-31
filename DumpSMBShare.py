@@ -108,7 +108,7 @@ class BFSDumpShare(object):
 
 
 def parse_args():
-    print("DumpSMBShare v1.3 - by @podalirius_\n")
+    print("DumpSMBShare v1.3 - by Remi GASCOU (Podalirius)\n")
 
     parser = argparse.ArgumentParser(add_help=True, description="A script to dump files and folders remotely from a Windows SMB share.")
 
